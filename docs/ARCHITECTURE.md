@@ -7,7 +7,8 @@ works/<slug>/
   project.json              # タイトル・作成日時
   state.json                # 現在工程・提出・進捗
   decisions.jsonl           # 総監督の判断履歴
-  handoff.md                # Claude / ChatGPT間の引継ぎ
+  handoff.md                # Claude / ChatGPT間の最新引継ぎ
+  handoffs.jsonl            # 引継ぎ履歴（初回引継ぎ時に作成）
   ideas/director-brief.md   # 総監督が決めた企画（現行）
   ideas/candidates.md       # 旧・収集機能（無期限休止）
   ideas/selected.md         # 旧・選抜記録（無期限休止）
