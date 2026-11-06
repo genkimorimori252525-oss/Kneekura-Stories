@@ -30,7 +30,7 @@ class StoriesTests(unittest.TestCase):
         info = stories.show_state("my-story", self.root)
         self.assertEqual(info["stage"], "ideation")
         self.assertEqual(info["status"], "working")
-        self.assertEqual(info["artifacts_missing"], ["ideas/candidates.md"])
+        self.assertEqual(info["artifacts_missing"], ["ideas/director-brief.md"])
 
     def test_reject_existing_and_path_traversal(self):
         with self.assertRaises(stories.StoryError):
@@ -43,39 +43,38 @@ class StoriesTests(unittest.TestCase):
             stories.submit_project("my-story", self.root)
 
     def test_director_only_approval(self):
-        self.write("ideas/candidates.md")
+        self.write("ideas/director-brief.md")
         stories.submit_project("my-story", self.root)
         with self.assertRaises(stories.StoryError):
             stories.approve_project("my-story", "採用", False, "案01", works_dir=self.root)
-        with self.assertRaises(stories.StoryError):
-            stories.approve_project("my-story", "採用", True, works_dir=self.root)
-        state = stories.approve_project("my-story", "採用", True, "案01", works_dir=self.root)
+        state = stories.approve_project("my-story", "採用", True, works_dir=self.root)
         self.assertEqual(state["stage"], "foundation")
-        self.assertIn("案01", (self.work / "ideas/selected.md").read_text(encoding="utf-8"))
+        self.assertFalse((self.work / "ideas/selected.md").exists())
+        self.assertTrue((self.work / "ideas/director-brief.md").exists())
         self.assertEqual(
             json.loads((self.work / "decisions.jsonl").read_text(encoding="utf-8").splitlines()[0])["actor"],
             "human_director",
         )
 
     def test_snapshot_changes_block_approval(self):
-        self.write("ideas/candidates.md")
+        self.write("ideas/director-brief.md")
         stories.submit_project("my-story", self.root)
-        self.write("ideas/candidates.md", "提出後に内容を更新しました。変更された企画候補です。")
+        self.write("ideas/director-brief.md", "提出後に内容を更新しました。変更された企画候補です。")
         with self.assertRaises(stories.StoryError):
-            stories.approve_project("my-story", "採用", True, "案01", works_dir=self.root)
+            stories.approve_project("my-story", "採用", True, works_dir=self.root)
 
     def test_return_preserves_draft(self):
-        self.write("ideas/candidates.md")
+        self.write("ideas/director-brief.md")
         stories.submit_project("my-story", self.root)
         state = stories.return_project("my-story", "次を調整", True, self.root)
         self.assertEqual(state["stage"], "ideation")
         self.assertEqual(state["status"], "working")
-        self.assertTrue((self.work / "ideas/candidates.md").exists())
+        self.assertTrue((self.work / "ideas/director-brief.md").exists())
 
     def reach_drafting(self):
-        self.write("ideas/candidates.md")
+        self.write("ideas/director-brief.md")
         stories.submit_project("my-story", self.root)
-        stories.approve_project("my-story", "この企画", True, "案01", works_dir=self.root)
+        stories.approve_project("my-story", "この企画", True, works_dir=self.root)
         for stage in ("foundation", "outline", "voice"):
             for pattern in stories.REQUIRED[stage]:
                 self.write(pattern)
@@ -106,12 +105,47 @@ class StoriesTests(unittest.TestCase):
         self.assertEqual(state["stage"], "complete")
 
     def test_wrong_stage_flags_are_rejected(self):
-        self.write("ideas/candidates.md")
+        self.write("ideas/director-brief.md")
         stories.submit_project("my-story", self.root)
         with self.assertRaises(stories.StoryError):
             stories.approve_project(
-                "my-story", "採用", True, "案01", continue_drafting=True, works_dir=self.root
+                "my-story", "採用", True, continue_drafting=True, works_dir=self.root
             )
+
+    def test_idea_collection_indefinitely_suspended(self):
+        self.assertFalse(stories.IDEA_COLLECTION_ENABLED)
+        self.write("ideas/candidates.md")
+        with self.assertRaises(stories.StoryError):
+            stories.submit_project("my-story", self.root)
+        self.write("ideas/director-brief.md")
+        stories.submit_project("my-story", self.root)
+        with self.assertRaises(stories.StoryError):
+            stories.approve_project("my-story", "採用", True, "案01", works_dir=self.root)
+        self.assertEqual(stories.show_state("my-story", self.root)["stage"], "ideation")
+
+    def test_changed_submission_can_be_returned(self):
+        self.write("ideas/director-brief.md")
+        stories.submit_project("my-story", self.root)
+        self.write("ideas/director-brief.md", "提出後に誤って書き換えた監督の企画です。")
+        state = stories.return_project("my-story", "修正して再提出", True, self.root)
+        self.assertEqual(state["status"], "working")
+        self.assertEqual(state["stage"], "ideation")
+        record = json.loads((self.work / "decisions.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+        self.assertTrue(record["changed_since_submission"])
+        stories.submit_project("my-story", self.root)
+
+    def test_missing_finished_chapters_rejected(self):
+        self.reach_drafting()
+        self.write("drafts/chapters/ch_01.md")
+        self.write("drafts/chapters/ch_02.md")
+        stories.submit_project("my-story", self.root)
+        stories.approve_project("my-story", "全章完成", True, works_dir=self.root)
+        self.write("manuscript/ch_01.md")
+        with self.assertRaises(stories.StoryError):
+            stories.submit_project("my-story", self.root)
+        self.write("manuscript/ch_02.md")
+        state = stories.submit_project("my-story", self.root)
+        self.assertEqual(state["status"], "awaiting_director")
 
     def test_project_list(self):
         entries = stories.list_projects(self.root)
