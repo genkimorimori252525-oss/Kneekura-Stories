@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+from pathlib import PurePosixPath
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -252,6 +253,93 @@ def return_project(
     return state
 
 
+def handoff_project(
+    slug: str, source: str, target: str, scope: str, summary: str,
+    works_dir: Path = WORKS_DIR,
+) -> dict:
+    """Record a human-readable transfer without advancing the workflow.
+
+    Advisory only: Git/GitHub branch discipline is still required to avoid
+    simultaneous edits to the same prose file.
+    """
+    participants = {"claude", "chatgpt", "director"}
+    if source not in participants or target not in participants or source == target:
+        raise StoryError("引継ぎ元・先は claude/chatgpt/director の異なる担当を指定してください。")
+    if not summary.strip():
+        raise StoryError("引継ぎの要点を --summary で指定してください。")
+    if len(summary) > 5000:
+        raise StoryError("引継ぎ内容が長すぎます。5000文字以内にしてください。")
+    normalized = scope.replace("\\", "/").strip("/")
+    path = PurePosixPath(normalized)
+    if (
+        not normalized or path.is_absolute()
+        or ".." in path.parts or "." in path.parts
+        or not normalized.startswith(("ideas/", "planning/", "canon/", "style/", "drafts/", "manuscript/"))
+    ):
+        raise StoryError("対象範囲は作品内の相対パスで指定してください。")
+    work = story_dir(slug, works_dir)
+    state = load_state(work)
+    entry = {
+        "at": timestamp(),
+        "from": source,
+        "to": target,
+        "scope": normalized,
+        "summary": summary.strip(),
+        "stage": state["stage"],
+        "status": state["status"],
+    }
+    with (work / "handoffs.jsonl").open("a", encoding="utf-8") as output:
+        output.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    (work / "handoff.md").write_text(
+        "# 最新の引継ぎ\n\n"
+        f"- 担当: {source} → {target}\n"
+        f"- 工程: {state['stage']}\n"
+        f"- 対象: `{normalized}`\n"
+        f"- 引継ぎ内容: {summary.strip()}\n\n"
+        "確定資料と原稿は勝手に上書きせず、対象ファイルの最新差分を確認すること。\n",
+        encoding="utf-8",
+    )
+    return entry
+
+
+def diagnose_project(slug: str, works_dir: Path = WORKS_DIR) -> dict:
+    """Software integrity checks only. Never a judge of literary quality."""
+    work = story_dir(slug, works_dir)
+    state = load_state(work)
+    errors = []
+    warnings = []
+    stage = state.get("stage")
+    status = state.get("status")
+    if stage not in STAGES + ("complete",):
+        errors.append("不明な工程です。")
+    if status not in ("working", "awaiting_director", "complete"):
+        errors.append("不明な状態です。")
+    if (stage == "complete") != (status == "complete"):
+        errors.append("完了工程と状態が一致しません。")
+    pending = state.get("pending")
+    if status == "awaiting_director":
+        if not isinstance(pending, dict) or pending.get("stage") != stage:
+            errors.append("提出状態が不整合です。")
+        elif pending.get("snapshot") != snapshot_hash(work):
+            errors.append("提出後に資料が変更されています。差戻しと再提出が必要です。")
+    elif pending is not None:
+        errors.append("提出待ちでない状態に提出物が残っています。")
+    if stage == "ideation" and not IDEA_COLLECTION_ENABLED:
+        if not _require_meaningful(work / "ideas" / "director-brief.md"):
+            warnings.append("総監督の企画ブリーフはまだ登録されていません。")
+    if stage in ("finalization", "complete"):
+        draft_files = {p.name for p in (work / "drafts" / "chapters").glob("*.md") if _require_meaningful(p)}
+        final_files = {p.name for p in (work / "manuscript").glob("*.md") if _require_meaningful(p)}
+        if not draft_files.issubset(final_files):
+            errors.append("完成原稿に未収録の章があります: " + ", ".join(sorted(draft_files - final_files)))
+    if not (work / "decisions.jsonl").is_file():
+        errors.append("監督決定の記録ファイルがありません。")
+    if not (work / "handoff.md").is_file():
+        warnings.append("引継ぎ資料がありません。")
+    return {"slug": slug, "ok": not errors, "errors": errors, "warnings": warnings,
+            "stage": stage, "status": status}
+
+
 def show_state(slug: str, works_dir: Path = WORKS_DIR) -> dict:
     work = story_dir(slug, works_dir)
     state = load_state(work)
@@ -283,6 +371,14 @@ def cli(argv: list[str] | None = None) -> int:
     init.add_argument("slug")
     init.add_argument("--title", required=True)
     sub.add_parser("list", help="作品一覧")
+    handoff = sub.add_parser("handoff", help="Claude/ChatGPT間の担当引継ぎを記録")
+    handoff.add_argument("slug")
+    handoff.add_argument("--from", dest="source", required=True, choices=("claude", "chatgpt", "director"))
+    handoff.add_argument("--to", dest="target", required=True, choices=("claude", "chatgpt", "director"))
+    handoff.add_argument("--scope", required=True)
+    handoff.add_argument("--summary", required=True)
+    doctor = sub.add_parser("doctor", help="制作状態の整合性を確認（文学的評価なし）")
+    doctor.add_argument("slug")
     for name in ("status", "submit", "approve", "return"):
         command = sub.add_parser(name)
         command.add_argument("slug")
@@ -301,6 +397,10 @@ def cli(argv: list[str] | None = None) -> int:
             output = list_projects()
         elif args.action == "status":
             output = show_state(args.slug)
+        elif args.action == "handoff":
+            output = handoff_project(args.slug, args.source, args.target, args.scope, args.summary)
+        elif args.action == "doctor":
+            output = diagnose_project(args.slug)
         elif args.action == "submit":
             output = submit_project(args.slug)
         elif args.action == "approve":
@@ -310,7 +410,7 @@ def cli(argv: list[str] | None = None) -> int:
         else:
             output = return_project(args.slug, args.note, args.confirm_director)
         print(json.dumps(output, ensure_ascii=False, indent=2))
-        return 0
+        return 1 if args.action == "doctor" and not output["ok"] else 0
     except (StoryError, OSError, ValueError, KeyError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
