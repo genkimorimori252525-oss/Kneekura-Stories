@@ -8,8 +8,9 @@ works/<slug>/
   state.json                # 現在工程・提出・進捗
   decisions.jsonl           # 総監督の判断履歴
   handoff.md                # Claude / ChatGPT間の引継ぎ
-  ideas/candidates.md       # 企画候補
-  ideas/selected.md         # 総監督が選んだ企画ID
+  ideas/director-brief.md   # 総監督が決めた企画（現行）
+  ideas/candidates.md       # 旧・収集機能（無期限休止）
+  ideas/selected.md         # 旧・選抜記録（無期限休止）
   planning/premise.md       # 企画の芯・テーマ
   planning/synopsis.md      # 結末までのあらすじ
   planning/outline.md       # 章別構成
@@ -28,7 +29,8 @@ works/<slug>/
 空の作品では、主要ファイルを自動作成しません。AIが工程ごとに作成した時点で提出条件を満たします。空のテンプレートが誤って採用されるのを防ぐためです。
 
 ## 真実の置き場
-- 監督の決定: `decisions.jsonl` （追記専用）
+- 監督の決定: `decisions.jsonl` （追記専用）。企画内容の正本は `ideas/director-brief.md`。
+- 自動アイデア収集・選抜は無期限休止。`IDEA_COLLECTION_ENABLED = False` は総監督の明示指示なしに変更しない。
 - 作業進捗: `state.json` （`tools/stories.py` のみ更新）
 - 世界観・人物・伏線の確定内容: `canon/` の正本（`proposals.md` は除外）
 - 構成: `planning/`。原稿に合わせて無断で書き換えない。
