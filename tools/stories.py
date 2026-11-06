@@ -19,8 +19,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKS_DIR = REPO_ROOT / "works"
 STAGES = ("ideation", "foundation", "outline", "voice", "drafting", "finalization")
+# Indefinitely suspended: only a new explicit director decision can reactivate this.
+IDEA_COLLECTION_ENABLED = False
 REQUIRED = {
-    "ideation": ("ideas/candidates.md",),
+    "ideation": ("ideas/candidates.md",) if IDEA_COLLECTION_ENABLED else ("ideas/director-brief.md",),
     "foundation": ("planning/premise.md", "canon/world.md", "canon/characters.md"),
     "outline": (
         "planning/synopsis.md",
@@ -92,7 +94,7 @@ def init_project(slug: str, title: str, works_dir: Path = WORKS_DIR) -> dict:
     write_json(work / "state.json", state)
     (work / "decisions.jsonl").write_text("", encoding="utf-8")
     (work / "handoff.md").write_text(
-        "# 引継ぎ\n\n現在の担当: 未設定\n\n次の制作範囲: 企画候補の作成\n\n未解決点: なし\n",
+        "# 引継ぎ\n\n現在の担当: 未設定\n\n次の制作範囲: 総監督が決定した企画の記録（自動収集は無期限休止）\n\n未解決点: なし\n",
         encoding="utf-8",
     )
     return state
@@ -149,6 +151,12 @@ def submit_project(slug: str, works_dir: Path = WORKS_DIR) -> dict:
         raise StoryError("提出に必要なファイルが不足しています: " + ", ".join(missing))
     if state["stage"] == "drafting" and draft_hash(work) == state.get("last_draft_hash"):
         raise StoryError("前回承認以降、章の本文が変わっていません。新しい執筆分を用意してください。")
+    if state["stage"] == "finalization":
+        draft_names = {p.name for p in (work / "drafts" / "chapters").glob("*.md") if _require_meaningful(p)}
+        final_names = {p.name for p in (work / "manuscript").glob("*.md") if _require_meaningful(p)}
+        missing_chapters = sorted(draft_names - final_names)
+        if missing_chapters:
+            raise StoryError("完成原稿に未収録の章があります: " + ", ".join(missing_chapters))
     state["pending"] = {
         "stage": state["stage"],
         "snapshot": snapshot_hash(work),
@@ -160,10 +168,10 @@ def submit_project(slug: str, works_dir: Path = WORKS_DIR) -> dict:
     return state
 
 
-def _pending_is_current(work: Path, state: dict) -> None:
+def _pending_is_current(work: Path, state: dict, check_snapshot: bool = True) -> None:
     if state["status"] != "awaiting_director" or not state.get("pending"):
         raise StoryError("承認または差戻しできる提出物がありません。")
-    if state["pending"]["snapshot"] != snapshot_hash(work):
+    if check_snapshot and state["pending"]["snapshot"] != snapshot_hash(work):
         raise StoryError("提出後に内容が変更されています。提出物を固定し直してから判断してください。")
 
 
@@ -183,10 +191,10 @@ def approve_project(
     state = load_state(work)
     _pending_is_current(work, state)
     stage = state["stage"]
-    if stage == "ideation" and not (pick and pick.strip()):
+    if stage == "ideation" and IDEA_COLLECTION_ENABLED and not (pick and pick.strip()):
         raise StoryError("企画の採用IDを --pick で指定してください。")
-    if stage != "ideation" and pick:
-        raise StoryError("--pick は企画選抜の工程だけで使えます。")
+    if pick and (stage != "ideation" or not IDEA_COLLECTION_ENABLED):
+        raise StoryError("アイデア収集・自動選抜は無期限休止中です。--pickは使用できません。")
     if stage != "drafting" and continue_drafting:
         raise StoryError("--continue-drafting は本文執筆工程でのみ使えます。")
 
@@ -200,7 +208,7 @@ def approve_project(
         "continue_drafting": continue_drafting,
         "submission_snapshot": state["pending"]["snapshot"],
     })
-    if stage == "ideation":
+    if stage == "ideation" and IDEA_COLLECTION_ENABLED:
         (work / "ideas" / "selected.md").write_text(
             "# 総監督が採用した企画\n\nID: " + pick.strip() +
             "\n\n監督指示: " + note.strip() + "\n", encoding="utf-8"
@@ -227,7 +235,8 @@ def return_project(
         raise StoryError("差戻しの理由を --note で残してください。")
     work = story_dir(slug, works_dir)
     state = load_state(work)
-    _pending_is_current(work, state)
+    # Stale submissions can be returned, otherwise the project gets stuck.
+    _pending_is_current(work, state, check_snapshot=False)
     append_decision(work, {
         "at": timestamp(),
         "type": "returned",
@@ -235,6 +244,7 @@ def return_project(
         "stage": state["stage"],
         "note": note.strip(),
         "submission_snapshot": state["pending"]["snapshot"],
+        "changed_since_submission": state["pending"]["snapshot"] != snapshot_hash(work),
     })
     state["pending"] = None
     state["status"] = "working"
