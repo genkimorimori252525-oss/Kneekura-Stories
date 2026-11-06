@@ -36,6 +36,17 @@ python tools/stories.py return first-story --note "主人公の動機をもう�
 
 執筆段階では、総監督が設定した複数章を一括で書けます。監督が「次のまとまりも執筆」と認めた場合は `approve ... --continue-drafting`、原稿を完成工程へ渡す場合は通常の `approve` を実行します。
 
+## 実証・引継ぎ・状態検査
+
+```bash
+python -m unittest discover -s tests -v
+python tools/rehearse.py
+python tools/stories.py doctor first-story
+python tools/stories.py handoff first-story --from claude --to chatgpt --scope planning/scenes.md --summary "人物設定を確認してシーン設計を引き継ぐ"
+```
+
+`rehearse.py` は外部AIを呼び出さず、監督承認を**模擬**して企画登録から二章の完成まで通す試験です。実際の共同執筆を試す手順は `docs/REHEARSAL.md` にあります。 `doctor` は進捗・欠落・提出時の変更などの**機械的整合性**だけを確認し、小説の品質は判定しません。
+
 ## AIへの共通指示
 
 - **ChatGPT**: `AGENTS.md` と `docs/WORKFLOW.md` を読む。GitHubを介して企画書・構成・原稿を保存し、総監督の指示を受けて進める。
