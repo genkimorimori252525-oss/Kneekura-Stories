@@ -43,6 +43,12 @@ python tools/stories.py return first-story --note "主人公の動機だけ見�
 - Claude / ChatGPT間の引継ぎは `handoff.md` に、担当の章と未解決点を記す。
 - 監督が承認した後の作業範囲内では、段落単位の確認を挟まずまとまって執筆する。
 
+### AI間の引継ぎと動作検証
+- ClaudeとChatGPTの担当交代時は `python tools/stories.py handoff <slug> --from claude --to chatgpt --scope drafts/chapters/ch_02.md --summary "..." ` で対象・要点を記録できる。
+- 引継ぎは `handoff.md` と `handoffs.jsonl` に残る。**同時編集の排他制御ではない**ため、Gitの差分と担当を確認する。
+- `python tools/stories.py doctor <slug>` は、提出時の差し替わり、工程状態、章ファイルの欠落を調べる。文学的な評価は行わない。
+- `python tools/rehearse.py` は模擬的な監督承認と仮文による通し試験。実際のAIモデルや監督本人の判断は呼ばない。実地試験の手順は `docs/REHEARSAL.md` を参照。
+
 ### 回帰・復元
 - Gitの履歴で前の稿を保持する。原稿変更時は差分を残す。
 - ハッシュによる提出固定は改稿指示によって解除される。自動破棄・強制リセットはしない。
