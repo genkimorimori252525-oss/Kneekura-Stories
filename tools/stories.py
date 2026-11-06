@@ -269,7 +269,7 @@ def handoff_project(
         raise StoryError("引継ぎの要点を --summary で指定してください。")
     if len(summary) > 5000:
         raise StoryError("引継ぎ内容が長すぎます。5000文字以内にしてください。")
-    normalized = scope.replace("\\", "/").strip("/")
+    normalized = scope.replace("\\", "/")
     path = PurePosixPath(normalized)
     if (
         not normalized or path.is_absolute()
