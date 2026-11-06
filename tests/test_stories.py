@@ -147,6 +147,52 @@ class StoriesTests(unittest.TestCase):
         state = stories.submit_project("my-story", self.root)
         self.assertEqual(state["status"], "awaiting_director")
 
+    def test_handoff_keeps_progress_and_pending_submissions(self):
+        self.write("ideas/director-brief.md")
+        stories.submit_project("my-story", self.root)
+        before = stories.show_state("my-story", self.root)["pending"]["snapshot"]
+        entry = stories.handoff_project(
+            "my-story", "claude", "chatgpt", "planning/scenes.md",
+            "担当を交代し、原稿の差分を先に確認", self.root,
+        )
+        self.assertEqual(entry["to"], "chatgpt")
+        self.assertEqual(stories.show_state("my-story", self.root)["pending"]["snapshot"], before)
+        self.assertTrue(stories.diagnose_project("my-story", self.root)["ok"])
+        self.assertIn("chatgpt", (self.work / "handoff.md").read_text(encoding="utf-8"))
+        self.assertEqual(len((self.work / "handoffs.jsonl").read_text(encoding="utf-8").splitlines()), 1)
+
+    def test_handoff_blocks_external_paths_and_invalid_actors(self):
+        for scope in ("../outside.md", "/tmp/private.md", "state.json", "drafts/../secret.md"):
+            with self.subTest(scope=scope):
+                with self.assertRaises(stories.StoryError):
+                    stories.handoff_project(
+                        "my-story", "claude", "chatgpt", scope, "引継ぎ", self.root
+                    )
+        with self.assertRaises(stories.StoryError):
+            stories.handoff_project(
+                "my-story", "robot", "chatgpt", "drafts/chapters/ch_01.md", "引継ぎ", self.root
+            )
+
+    def test_doctor_detects_stale_submissions(self):
+        self.write("ideas/director-brief.md")
+        stories.submit_project("my-story", self.root)
+        self.assertTrue(stories.diagnose_project("my-story", self.root)["ok"])
+        self.write("ideas/director-brief.md", "提出内容と異なる監督の企画ブリーフです。")
+        result = stories.diagnose_project("my-story", self.root)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("提出後" in m for m in result["errors"]))
+
+    def test_doctor_requires_all_finished_chapters(self):
+        self.reach_drafting()
+        self.write("drafts/chapters/ch_01.md")
+        self.write("drafts/chapters/ch_02.md")
+        stories.submit_project("my-story", self.root)
+        stories.approve_project("my-story", "完了工程", True, works_dir=self.root)
+        self.write("manuscript/ch_01.md")
+        self.assertFalse(stories.diagnose_project("my-story", self.root)["ok"])
+        self.write("manuscript/ch_02.md")
+        self.assertTrue(stories.diagnose_project("my-story", self.root)["ok"])
+
     def test_project_list(self):
         entries = stories.list_projects(self.root)
         self.assertEqual(len(entries), 1)
