@@ -20,7 +20,7 @@
 - `canon/` は総監督が認めた事実の正本。執筆中の新事実は `canon/proposals.md` に候補として記録し、確定内容を無断で上書きしない。
 
 ## 安全な共同作業
-- 同じ場面をClaudeとChatGPTが同時編集しない。担当章・場面を共有し、先に担当を決める。
+- 同じ場面をClaudeとChatGPTが同時編集しない。担当章・場面を共有し、先に担当を決める。作業の交代には `python tools/stories.py handoff <slug> --from claude --to chatgpt --scope ... --summary ...` で引継ぎ記録を残す（CLIを実行できる環境のみ）。
 - 作品資料は `works/<slug>/` に置く。複数作品間で設定を混ぜない。
 - `drafts/` は作業原稿、`manuscript/` は総監督の確認を経た完成原稿。承認なしに後者を上書きしない。
 - 指示されていない `git reset --hard`、原稿削除、公開設定変更、外部送信、API課金を行わない。
