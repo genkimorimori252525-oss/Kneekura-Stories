@@ -13,7 +13,7 @@ python tools/stories.py init first-story --title "最初の物語"
 python tools/stories.py status first-story
 ```
 
-続いてClaude Codeでこのリポジトリを開き、「`works/first-story` の企画候補を10案考えて、`ideas/candidates.md` に保存して。決定はしないで」と依頼するか、ChatGPTに同じ指示を出してGitHubへの保存を依頼します。
+続いて、総監督がChatGPTやClaudeと対話しながら企画を決め、その内容を `works/first-story/ideas/director-brief.md` に記録します。アイデアの大量収集・自動選抜は**無期限休止中**です。
 
 ```bash
 python tools/stories.py submit first-story
@@ -22,7 +22,7 @@ python tools/stories.py submit first-story
 これは**企画を総監督に提出するだけ**です。ClaudeやChatGPTが独断で承認してはいけません。総監督が作品を選んだら、本人の明示指示に基づいて次を実行します。
 
 ```bash
-python tools/stories.py approve first-story --pick "案03" --note "この企画で進める" --confirm-director
+python tools/stories.py approve first-story --note "総監督が決定した企画で進める" --confirm-director
 ```
 
 以降は `foundation → outline → voice → drafting → finalization` へ進みます。各工程の「提出」はまとまった成果物単位で行い、台詞や段落ごとに確認しません。
@@ -46,7 +46,7 @@ python tools/stories.py return first-story --note "主人公の動機をもう�
 
 ## 絶対に行わないこと
 
-AI審査員、Eloランキング、敵対的編集、自動改稿ループ、点数による原稿破棄、AI独断での承認・公開は実装しません。文章や人物の個性を保ち、修正が必要なら総監督に判断してもらいます。
+AI審査員、Eloランキング、敵対的編集、自動改稿ループ、点数による原稿破棄、AI独断での承認・公開は実装しません。アイデア大量収集・自動選抜機能は削除せず無期限休止し、総監督の企画登録に切り替えています。文章や人物の個性を保ち、修正が必要なら総監督に判断してもらいます。
 
 ## 検証
 
