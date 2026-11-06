@@ -19,7 +19,7 @@ python tools/stories.py status first-story
 python tools/stories.py submit first-story
 ```
 
-これは**企画を総監督に提出するだけ**です。ClaudeやChatGPTが独断で承認してはいけません。総監督が作品を選んだら、本人の明示指示に基づいて次を実行します。
+これは**企画を総監督に提出するだけ**です。ClaudeやChatGPTが独断で承認してはいけません。総監督が登録内容を確認したら、本人の明示指示に基づいて次を実行します。
 
 ```bash
 python tools/stories.py approve first-story --note "総監督が決定した企画で進める" --confirm-director
